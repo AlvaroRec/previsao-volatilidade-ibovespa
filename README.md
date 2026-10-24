@@ -49,20 +49,24 @@ pip install -r requirements.txt
 
 # 3. baixar e tratar os dados
 python src/coleta_dados.py
+
+# 4. construir as variáveis (volatilidade, alvos e preditores)
+python src/features.py
 ```
 
-O script salva os arquivos brutos em `data/raw/`, a base final em `data/processed/dados_mercado.csv` e um registro da coleta (data de acesso e contagem de dados faltantes) em `data/coleta_log.txt`.
+O script de coleta salva os arquivos brutos em `data/raw/`, a base final em `data/processed/dados_mercado.csv` e um registro da coleta (data de acesso e contagem de dados faltantes) em `data/coleta_log.txt`. O script de variáveis confere automaticamente a ausência de viés de antecipação e salva `data/processed/features.csv`.
 
 ## Estrutura
 
 ```
 src/coleta_dados.py   coleta e controle de qualidade dos dados
+src/features.py       volatilidade de Garman-Klass, alvos, componentes HAR e preditores
 data/                 dados baixados (não versionados)
 ```
 
 ## Status
 
-Etapa 1 (proposta e plano de dados): concluída. Coleta de dados implementada; modelagem em construção.
+Etapa 1 (proposta e plano de dados): concluída. Etapa 2 (análise exploratória e modelagem): em andamento.
 
 ## Referências principais
 
