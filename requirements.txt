@@ -1,9 +1,14 @@
-pandas
-numpy
-scikit-learn
-statsmodels
-arch
-yfinance
-matplotlib
-seaborn
-requests
+# Versões usadas no projeto (Python 3.14, Windows, outubro de 2026)
+pandas==3.1.0
+numpy==2.5.4
+scipy==1.18.1
+scikit-learn==1.9.1
+statsmodels==0.15.0
+arch==8.0.0
+yfinance==1.7.0
+matplotlib==3.11.2
+seaborn==0.13.2
+requests==2.34.2
+# Para abrir e rodar os notebooks
+notebook
+ipykernel

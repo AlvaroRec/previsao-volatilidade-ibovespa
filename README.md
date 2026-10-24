@@ -52,6 +52,9 @@ python src/coleta_dados.py
 
 # 4. construir as variáveis (volatilidade, alvos e preditores)
 python src/features.py
+
+# 5. rodar a análise exploratória (gera as figuras em figuras/)
+jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb
 ```
 
 O script de coleta salva os arquivos brutos em `data/raw/`, a base final em `data/processed/dados_mercado.csv` e um registro da coleta (data de acesso e contagem de dados faltantes) em `data/coleta_log.txt`. O script de variáveis confere automaticamente a ausência de viés de antecipação e salva `data/processed/features.csv`.
@@ -61,6 +64,8 @@ O script de coleta salva os arquivos brutos em `data/raw/`, a base final em `dat
 ```
 src/coleta_dados.py   coleta e controle de qualidade dos dados
 src/features.py       volatilidade de Garman-Klass, alvos, componentes HAR e preditores
+notebooks/01_eda.ipynb  análise exploratória dos dados
+figuras/              figuras geradas pelos notebooks
 data/                 dados baixados (não versionados)
 ```
 
