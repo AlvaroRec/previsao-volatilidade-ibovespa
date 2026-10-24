@@ -44,18 +44,47 @@ ANOS_POR_BLOCO = 9
 CABECALHO = {"User-Agent": "Mozilla/5.0 (projeto academico UFJF)"}
 
 
-def _get(url: str, params: dict | None = None, tentativas: int = 3) -> requests.Response:
+def _get(
+    url: str,
+    params: dict | None = None,
+    tentativas: int = 3,
+    timeout: int = 60,
+    headers: dict | None = None,
+) -> requests.Response:
     """GET com timeout e novas tentativas simples."""
     ultimo_erro: Exception | None = None
+    cab = CABECALHO if headers is None else headers
     for i in range(tentativas):
         try:
-            resp = requests.get(url, params=params, headers=CABECALHO, timeout=60)
+            resp = requests.get(url, params=params, headers=cab, timeout=timeout)
             resp.raise_for_status()
             return resp
         except requests.RequestException as erro:  # noqa: PERF203
             ultimo_erro = erro
             time.sleep(2 * (i + 1))
     raise RuntimeError(f"Falha ao acessar {url}: {ultimo_erro}")
+
+
+def _get_json(url: str, params: dict | None = None, tentativas: int = 4) -> list:
+    """GET que exige resposta em JSON.
+
+    A API do BCB às vezes responde com uma página vazia ou de erro (sobretudo
+    depois de vários pedidos seguidos). Nesse caso esperamos e tentamos de novo;
+    se continuar falhando, mostramos o começo da resposta para diagnóstico.
+    """
+    resp: requests.Response | None = None
+    for i in range(tentativas):
+        resp = _get(url, params)
+        try:
+            return resp.json()
+        except ValueError:
+            time.sleep(5 * (i + 1))
+    trecho = (resp.text[:300] if resp is not None else "").strip() or "(resposta vazia)"
+    raise RuntimeError(
+        f"O BCB não devolveu JSON para {url} {params} após {tentativas} tentativas.\n"
+        f"Status HTTP: {resp.status_code if resp is not None else '?'}\n"
+        f"Início da resposta: {trecho}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -93,10 +122,11 @@ def baixar_sgs(codigo: int, nome: str, inicio: str = INICIO) -> pd.Series:
             "dataInicial": ini.strftime("%d/%m/%Y"),
             "dataFinal": fim.strftime("%d/%m/%Y"),
         }
-        dados = _get(url, params).json()
+        dados = _get_json(url, params)
         if dados:
             partes.append(pd.DataFrame(dados))
         ini = fim + dt.timedelta(days=1)
+        time.sleep(1)  # pausa curta entre pedidos para não sobrecarregar a API
     if not partes:
         raise RuntimeError(f"O SGS não retornou dados para a série {codigo}.")
     df = pd.concat(partes, ignore_index=True)
@@ -109,7 +139,31 @@ def baixar_sgs(codigo: int, nome: str, inicio: str = INICIO) -> pd.Series:
 
 def baixar_vix(inicio: str = INICIO) -> pd.Series:
     """VIX (VIXCLS) pelo FRED, em CSV, sem necessidade de chave de API."""
-    resp = _get("https://fred.stlouisfed.org/graph/fredgraph.csv", {"id": "VIXCLS"})
+    # O FRED às vezes demora ou corta conexões que parecem automáticas. Tentamos
+    # identificações diferentes: a padrão da biblioteca requests e a de um navegador
+    # comum. Pedimos só o período da amostra (cosd = data inicial).
+    url = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+    params = {"id": "VIXCLS", "cosd": inicio}
+    opcoes_cabecalho = [
+        {},  # identificação padrão do requests
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            ),
+            "Accept": "text/csv,text/plain,*/*",
+        },
+    ]
+    erros: list[str] = []
+    resp = None
+    for cab in opcoes_cabecalho:
+        try:
+            resp = _get(url, params, tentativas=2, timeout=120, headers=cab)
+            break
+        except RuntimeError as erro:
+            erros.append(str(erro))
+    if resp is None:
+        raise RuntimeError("Não foi possível baixar o VIX do FRED:\n" + "\n".join(erros))
     df = pd.read_csv(io.StringIO(resp.text))
     df.columns = ["data", "vix"]  # o nome da 1a coluna mudou entre versões do FRED
     df["data"] = pd.to_datetime(df["data"])
