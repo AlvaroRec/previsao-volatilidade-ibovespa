@@ -75,7 +75,12 @@ def para_vol_anual(variancia: pd.Series) -> pd.Series:
 
 
 def media_passada(var: pd.Series, k: int) -> pd.Series:
-    """Média da variância nos dias t-k+1 a t (só passado e presente)."""
+    """Média da variância nos dias t-k+1 a t (só passado e presente).
+
+    Diferença declarada em relação a Corsi (2009): lá, os componentes semanal e
+    mensal são médias das VOLATILIDADES diárias; aqui, são médias das VARIÂNCIAS,
+    convertidas depois em volatilidade, para seguir a mesma construção do alvo.
+    """
     return var.rolling(k, min_periods=k).mean()
 
 

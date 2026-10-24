@@ -156,6 +156,33 @@ def rodar(base: pd.DataFrame, feats: pd.DataFrame, h: int) -> dict:
     }
 
 
+def perdas_robustas(previsoes: pd.DataFrame, realizado: pd.Series, referencia: str = "HAR") -> pd.DataFrame:
+    """Métricas de erro robustas a um alvo medido com ruído (Patton, 2011).
+
+    Patton (2011) mostra que, quando o alvo é uma estimativa ruidosa da
+    volatilidade verdadeira (como o Garman-Klass), só algumas funções de perda
+    preservam a ordem correta entre modelos. Entre elas estão o MSE calculado
+    sobre a VARIÂNCIA e a QLIKE. O MSE sobre a volatilidade, usado em `avaliar`,
+    não está entre elas. Esta função serve de verificação de robustez.
+
+    QLIKE = média de [ alvo/previsão - ln(alvo/previsão) - 1 ], com variâncias.
+    """
+    var_prev = previsoes**2          # volatilidade anualizada ao quadrado = variância anualizada
+    var_real = realizado**2
+    mse_var = (var_prev.sub(var_real, axis=0) ** 2).mean()
+    razao = var_prev.rdiv(var_real, axis=0)  # alvo / previsão
+    qlike = (razao - np.log(razao) - 1).mean()
+    mse_vol = (previsoes.sub(realizado, axis=0) ** 2).mean()
+    return pd.DataFrame({
+        "MSE na volatilidade / HAR": mse_vol / mse_vol[referencia],
+        "MSE na variância / HAR": mse_var / mse_var[referencia],
+        "QLIKE / HAR": qlike / qlike[referencia],
+        "posição (MSE vol.)": mse_vol.rank().astype(int),
+        "posição (MSE var.)": mse_var.rank().astype(int),
+        "posição (QLIKE)": qlike.rank().astype(int),
+    })
+
+
 def avaliar(previsoes: pd.DataFrame, realizado: pd.Series, referencia: str = "HAR") -> pd.DataFrame:
     """MSE, RMSE e MSE relativo ao modelo de referência (< 1 = melhor que ele)."""
     erros = previsoes.sub(realizado, axis=0)
