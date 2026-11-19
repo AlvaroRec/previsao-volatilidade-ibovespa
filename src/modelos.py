@@ -156,6 +156,80 @@ def rodar(base: pd.DataFrame, feats: pd.DataFrame, h: int) -> dict:
     }
 
 
+def rodar_variancia(R: dict) -> dict:
+    """Previsões feitas DIRETAMENTE na escala da variância (verificação da Etapa 2).
+
+    Elevar ao quadrado uma previsão de volatilidade não dá a previsão da
+    variância: o quadrado da média é menor que a média do quadrado. Por isso,
+    para avaliar com perdas definidas na variância (MSE na variância e QLIKE),
+    o HAR e o random forest são reestimados com o alvo em variância.
+
+    Unidade: variância anualizada, em (% a.a.)², isto é, a volatilidade do
+    alvo ao quadrado. Usa o mesmo treino, o mesmo teste e os mesmos
+    hiperparâmetros de `rodar`.
+
+    - HAR: MQO da variância futura sobre as variâncias médias de 1, 5 e 22 dias.
+    - GARCH: já prevê a variância; aqui ela só é mantida nessa escala.
+    - RF: mesmos preditores (árvores não dependem da escala dos preditores),
+      com o alvo em variância.
+    - Ingênuo: a variância média dos últimos 22 dias.
+    """
+    h, treino, teste = R["h"], R["treino"], R["teste"]
+    alvo = f"alvo_h{h}"
+    todas = HAR + EXOGENAS
+    X_tr = sm.add_constant(treino[HAR] ** 2)
+    har_var = sm.OLS(treino[alvo] ** 2, X_tr).fit(cov_type="HAC", cov_kwds={"maxlags": 22})
+    prev_har = har_var.predict(sm.add_constant(teste[HAR] ** 2, has_constant="add"))
+
+    def rf_var(colunas):
+        rf = RandomForestRegressor(**PARAMS_RF)
+        rf.fit(treino[colunas], treino[alvo] ** 2)
+        return pd.Series(rf.predict(teste[colunas]), index=teste.index)
+
+    prev = pd.DataFrame({
+        "Ingênuo (média 22 dias)": teste["har_m"] ** 2,
+        "HAR": prev_har,
+        "GARCH com fator de escala": R["previsoes"]["GARCH com fator de escala"] ** 2,  # exato: o GARCH prevê a variância
+        "RF (só HAR)": rf_var(HAR),
+        "RF (HAR + exógenas)": rf_var(todas),
+    })
+    return {"previsoes": prev, "realizado": teste[alvo] ** 2, "har": har_var}
+
+
+def comparar_escalas(R: dict, V: dict) -> pd.DataFrame:
+    """Perdas na variância para as duas formas de prever cada modelo.
+
+    "(vol.)²": modelo estimado em volatilidade, previsão elevada ao quadrado.
+    "(var.)": modelo estimado diretamente em variância.
+    O GARCH e o ingênuo são iguais nas duas formas. Referência: HAR (vol.)².
+    """
+    pv = R["previsoes"]
+    tab = pd.DataFrame({
+        "Ingênuo (média 22 dias)": V["previsoes"]["Ingênuo (média 22 dias)"],
+        "GARCH com fator de escala": V["previsoes"]["GARCH com fator de escala"],
+        "HAR (vol.)²": pv["HAR"] ** 2,
+        "HAR (var.)": V["previsoes"]["HAR"],
+        "RF só HAR (vol.)²": pv["RF (só HAR)"] ** 2,
+        "RF só HAR (var.)": V["previsoes"]["RF (só HAR)"],
+        "RF HAR + exógenas (vol.)²": pv["RF (HAR + exógenas)"] ** 2,
+        "RF HAR + exógenas (var.)": V["previsoes"]["RF (HAR + exógenas)"],
+    })
+    return perdas_na_variancia(tab, V["realizado"], referencia="HAR (vol.)²")
+
+
+def perdas_na_variancia(previsoes_var: pd.DataFrame, realizado_var: pd.Series, referencia: str = "HAR") -> pd.DataFrame:
+    """MSE na variância e QLIKE, com previsões já na escala da variância."""
+    mse_var = (previsoes_var.sub(realizado_var, axis=0) ** 2).mean()
+    razao = previsoes_var.rdiv(realizado_var, axis=0)  # alvo / previsão
+    qlike = (razao - np.log(razao) - 1).mean()
+    return pd.DataFrame({
+        "MSE na variância / HAR": mse_var / mse_var[referencia],
+        "QLIKE / HAR": qlike / qlike[referencia],
+        "posição (MSE var.)": mse_var.rank().astype(int),
+        "posição (QLIKE)": qlike.rank().astype(int),
+    })
+
+
 def perdas_robustas(previsoes: pd.DataFrame, realizado: pd.Series, referencia: str = "HAR") -> pd.DataFrame:
     """Métricas de erro robustas a um alvo medido com ruído (Patton, 2011).
 
