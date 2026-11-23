@@ -76,7 +76,7 @@ data/                 dados baixados (não versionados)
 
 ## Status
 
-Etapa 1 (proposta e plano de dados): concluída. Etapa 2 (análise exploratória e modelagem): em andamento.
+Etapa 1 (proposta e plano de dados): concluída. Etapa 2 (análise exploratória e modelagem): concluída. Etapa 3 (validação fora da amostra e robustez): a iniciar.
 
 ## Referências principais
 
