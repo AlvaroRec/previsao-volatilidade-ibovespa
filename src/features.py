@@ -121,11 +121,19 @@ def sinalizar_picos(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Montagem
 # ---------------------------------------------------------------------------
-def construir_features(base: pd.DataFrame) -> pd.DataFrame:
-    """Cria todas as variáveis a partir da base de mercado."""
+def construir_features(base: pd.DataFrame, dias_excluidos: list[str] | None = None) -> pd.DataFrame:
+    """Cria todas as variáveis a partir da base de mercado.
+
+    dias_excluidos (teste de robustez da Etapa 3): a variância desses dias vira
+    ausente. Com isso, todo alvo e todo componente do HAR cuja média incluiria
+    um desses dias também fica ausente, e essas linhas saem da estimação.
+    """
     out = pd.DataFrame(index=base.index)
 
     var = variancia_garman_klass(base)
+    if dias_excluidos:
+        var = var.copy()
+        var.loc[pd.to_datetime(dias_excluidos)] = np.nan
     out["var_gk"] = var
     out["vol_gk"] = para_vol_anual(var)
 
